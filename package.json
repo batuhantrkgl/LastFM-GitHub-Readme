@@ -1,0 +1,13 @@
+{
+  "name": "lastfm-github-readme",
+  "module": "index.js",
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "dependencies": {
+    "canvas": "^3.1.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "node-vibrant": "^4.0.3"
+  }
+}
