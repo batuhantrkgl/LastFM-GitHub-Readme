@@ -69,6 +69,47 @@ For development with auto-reload:
 npm run dev
 ```
 
+## Deploying to Vercel
+
+You can easily deploy this application to [Vercel](https://vercel.com) for free:
+
+1. Fork this repository to your GitHub account
+
+2. Sign up for a Vercel account if you don't have one
+
+3. Import your forked repository in Vercel:
+   - Go to https://vercel.com/new
+   - Select "Import Git Repository"
+   - Choose your forked repository
+
+4. Configure the project:
+   - Add your environment variables (API_KEY, SHARED_SECRET, etc.) in the Vercel dashboard
+   - Use the `.env.vercel.example` file as a reference for the required variables
+   - Make sure to set `homepage_url` and `callback_url` to your Vercel deployment URL
+   - Vercel will automatically detect the Node.js project and use the correct settings
+
+5. Deploy the project:
+   - Click "Deploy"
+   - Vercel will build and deploy your application
+
+6. Update your README widget URL:
+   - Replace the URL with your new Vercel deployment URL
+   - Example: `![My Last.fm](https://your-vercel-app.vercel.app/api/widget/YOUR_LASTFM_USERNAME)`
+
+### Using Your Vercel Deployment
+
+Once deployed, you can use your Last.fm widget in your GitHub README by using the following markdown:
+
+```markdown
+![My Last.fm](https://your-vercel-app.vercel.app/api/widget/YOUR_LASTFM_USERNAME)
+```
+
+Replace:
+- `your-vercel-app.vercel.app` with your actual Vercel deployment URL
+- `YOUR_LASTFM_USERNAME` with your Last.fm username
+
+The widget will automatically update whenever you play music on Last.fm. GitHub caches images, so it may take some time for changes to appear in your README.
+
 ## Environment Variables
 
 | Variable | Description |
@@ -89,9 +130,12 @@ npm run dev
 │   ├── svg.js         # SVG generation
 │   └── utils.js       # Utility functions
 ├── .env.example       # Example environment variables
+├── .env.vercel.example # Example environment variables for Vercel
 ├── .gitignore         # Git ignore file
+├── index.js           # Main entry point
 ├── package.json       # Project metadata and dependencies
-└── README.md          # This file
+├── README.md          # This file
+└── vercel.json        # Vercel deployment configuration
 ```
 
 ## License
