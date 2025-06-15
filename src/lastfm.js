@@ -1,7 +1,7 @@
 /**
  * Last.fm API integration functions
  */
-const fetch = require('node-fetch');
+const fetch = require('node-fetch').default;
 const { generateSignature, isImageValid, getGithubAvatar } = require('./utils');
 
 // Simple in-memory cache with expiration
@@ -158,7 +158,7 @@ async function getNowPlaying(username) {
                 name: trackName,
                 artist: artistName,
                 album: albumName,
-                image: trackImage || 'https://lastfm.freetls.fastly.net/i/u/300x300/2a96cbd8b46e442fc41c2b86b821562f.png',
+                image: trackImage || '/api/lastfm-image/300x300/2a96cbd8b46e442fc41c2b86b821562f.png',
                 url: track.url || '#',
                 timestamp
             },

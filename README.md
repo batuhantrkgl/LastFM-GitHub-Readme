@@ -130,12 +130,9 @@ The widget will automatically update whenever you play music on Last.fm. GitHub 
 │   ├── svg.js         # SVG generation
 │   └── utils.js       # Utility functions
 ├── .env.example       # Example environment variables
-├── .env.vercel.example # Example environment variables for Vercel
 ├── .gitignore         # Git ignore file
-├── index.js           # Main entry point
 ├── package.json       # Project metadata and dependencies
-├── README.md          # This file
-└── vercel.json        # Vercel deployment configuration
+└── README.md          # This file
 ```
 
 ## License

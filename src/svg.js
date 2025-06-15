@@ -1,7 +1,7 @@
 /**
  * SVG generation functions for the Last.fm GitHub README widget
  */
-const Vibrant = require('node-vibrant/node');
+const { Vibrant } = require('node-vibrant/node');
 const { truncate } = require('./utils');
 
 /**
@@ -10,6 +10,15 @@ const { truncate } = require('./utils');
  * @returns {Promise<Object>} - Object containing background, text, and accent colors
  */
 async function extractColors(imageUrl) {
+    // If the URL is relative or empty, return default colors
+    if (!imageUrl || imageUrl.startsWith('/')) {
+        return {
+            background: '#fbfbfb',
+            text: '#ffffff',
+            accent: '#1DB954'
+        };
+    }
+
     try {
         const palette = await Vibrant.from(imageUrl).getPalette();
         return {
@@ -73,7 +82,7 @@ async function generateNowPlayingSVG(data) {
             <rect x="20" y="15" width="70" height="70" rx="4"/>
         </clipPath>
         <image x="20" y="15" width="70" height="70" clip-path="url(#albumArt)"
-            href="${track.image || 'https://lastfm.freetls.fastly.net/i/u/300x300/2a96cbd8b46e442fc41c2b86b821562f.png'}"
+            href="${track.image || '/api/lastfm-image/300x300/2a96cbd8b46e442fc41c2b86b821562f.png'}"
         />
 
         <!-- User Profile Picture -->
@@ -81,7 +90,7 @@ async function generateNowPlayingSVG(data) {
             <circle cx="420" cy="30" r="15"/>
         </clipPath>
         <image x="405" y="15" width="30" height="30" clip-path="url(#profilePic)"
-            href="${user.image || 'https://lastfm.freetls.fastly.net/i/u/avatar/818148bf1c8f4d4bcb96427dfa5c42b7'}"
+            href="${user.image || '/api/lastfm-image/avatar/818148bf1c8f4d4bcb96427dfa5c42b7'}"
         />
 
         <!-- Playing Animation -->

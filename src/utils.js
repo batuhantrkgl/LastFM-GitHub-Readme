@@ -2,6 +2,7 @@
  * Utility functions for the Last.fm GitHub README widget
  */
 const crypto = require('crypto');
+const fetch = require('node-fetch');
 
 /**
  * Generates a signature for Last.fm API authentication
@@ -13,7 +14,7 @@ function generateSignature(params) {
         .sort()
         .map(key => `${key}${params[key]}`)
         .join('');
-    
+
     return crypto
         .createHash('md5')
         .update(sorted + process.env.SHARED_SECRET)
@@ -40,7 +41,10 @@ async function isImageValid(url) {
  * @returns {string} - GitHub avatar URL
  */
 function getGithubAvatar(username) {
-    return `https://github.com/${username}.png`;
+    // Use a proxy approach to avoid cross-site cookie issues
+    // Instead of directly linking to GitHub, create a local endpoint to fetch the avatar
+    // This way, the browser makes a request to the same origin
+    return `/api/avatar/${username}`;
 }
 
 /**
