@@ -1,13 +1,37 @@
 {
   "name": "lastfm-github-readme",
-  "module": "index.js",
+  "version": "1.0.0",
+  "description": "Display your Last.fm now playing information in your GitHub README",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js"
+  },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "nodemon": "^2.0.22"
   },
   "dependencies": {
     "canvas": "^3.1.0",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "node-fetch": "^2.6.9",
     "node-vibrant": "^4.0.3"
-  }
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/batuhantrkgl/LastFM-GitHub-Readme"
+  },
+  "keywords": [
+    "lastfm",
+    "github",
+    "readme",
+    "widget",
+    "now-playing"
+  ],
+  "author": "batuhantrkgl",
+  "license": "MIT"
 }
