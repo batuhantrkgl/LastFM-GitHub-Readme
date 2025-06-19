@@ -2,7 +2,7 @@
  * SVG generation functions for the Last.fm GitHub README widget
  */
 const { Vibrant } = require('node-vibrant/node');
-const { truncate } = require('./utils');
+const { truncate, escapeXml } = require('./utils');
 
 /**
  * Extracts color palette from an image URL
@@ -41,11 +41,11 @@ async function extractColors(imageUrl) {
  * @param {Object} data - Now playing data
  * @returns {Promise<string>} - SVG markup
  */
-async function generateNowPlayingSVG(data) {
+async function generateNowPlayingSVG(data, theme = 'auto') {
     // Validate input data
     if (!data || !data.track || !data.user) {
         console.error('Invalid data provided to generateNowPlayingSVG');
-        return generateFallbackSVG();
+        return generateFallbackSVG(theme);
     }
 
     const { track, isPlaying, user } = data;
@@ -53,10 +53,26 @@ async function generateNowPlayingSVG(data) {
     // Ensure track has all required properties
     if (!track.name || !track.artist || !track.album) {
         console.error('Track data is missing required properties');
-        return generateFallbackSVG();
+        return generateFallbackSVG(theme);
     }
 
-    const colors = await extractColors(track.image || '');
+    let colors = await extractColors(track.image || '');
+
+    // Apply theme overrides
+    if (theme === 'dark') {
+        colors = {
+            background: '#1e1e1e',
+            text: '#ffffff',
+            accent: colors.accent || '#1DB954'
+        };
+    } else if (theme === 'light') {
+        colors = {
+            background: '#ffffff',
+            text: '#000000',
+            accent: colors.accent || '#1DB954'
+        };
+    }
+
     const timeAgo = isPlaying ? 'Now playing' : `${Math.floor((Date.now() - (track.timestamp || Date.now())) / 60000)}m ago`;
 
     return `
@@ -82,7 +98,7 @@ async function generateNowPlayingSVG(data) {
             <rect x="20" y="15" width="70" height="70" rx="4"/>
         </clipPath>
         <image x="20" y="15" width="70" height="70" clip-path="url(#albumArt)"
-            href="${track.image || '/api/lastfm-image/300x300/2a96cbd8b46e442fc41c2b86b821562f.png'}"
+            href="${escapeXml(track.image && !track.image.startsWith('/') ? track.image : `/api/lastfm-image/300x300/2a96cbd8b46e442fc41c2b86b821562f.png?artist=${encodeURIComponent(track.artist)}&track=${encodeURIComponent(track.name)}`)}"
         />
 
         <!-- User Profile Picture -->
@@ -90,7 +106,7 @@ async function generateNowPlayingSVG(data) {
             <circle cx="420" cy="30" r="15"/>
         </clipPath>
         <image x="405" y="15" width="30" height="30" clip-path="url(#profilePic)"
-            href="${user.image || '/api/lastfm-image/avatar/818148bf1c8f4d4bcb96427dfa5c42b7'}"
+            href="${user.image && !user.image.startsWith('/') ? user.image : '/api/lastfm-image/avatar/818148bf1c8f4d4bcb96427dfa5c42b7'}"
         />
 
         <!-- Playing Animation -->
@@ -101,33 +117,46 @@ async function generateNowPlayingSVG(data) {
 
         <!-- Track Info -->
         <g transform="translate(120, 0)">
+            <!-- Limit text width to prevent overlap with profile picture -->
             <text x="0" y="45" font-family="Arial" font-size="16" font-weight="bold" fill="${colors.text}">
-                ${truncate(track.name, 30)}
+                ${truncate(track.name, 25)}
             </text>
             <text x="0" y="65" font-family="Arial" font-size="14" fill="${colors.text}80">
-                ${truncate(track.artist, 35)}
+                ${truncate(track.artist, 30)}
             </text>
             <text x="0" y="85" font-family="Arial" font-size="12" fill="${colors.text}60">
-                ${truncate(track.album, 40)}
+                ${truncate(track.album, 35)}
             </text>
         </g>
 
         <!-- Time Info -->
         <text x="420" y="85" font-family="Arial" font-size="12" fill="${colors.text}80" text-anchor="middle">
-            ${timeAgo}
+            ${escapeXml(timeAgo)}
         </text>
     </svg>`;
 }
 
 /**
  * Generates a fallback SVG when no track is playing
+ * @param {string} theme - Theme to apply (auto, dark, light)
  * @returns {string} - SVG markup
  */
-function generateFallbackSVG() {
+function generateFallbackSVG(theme = 'auto') {
+    let bgColor = '#fbfbfb';
+    let textColor = '#666666';
+
+    if (theme === 'dark') {
+        bgColor = '#1e1e1e';
+        textColor = '#ffffff';
+    } else if (theme === 'light') {
+        bgColor = '#ffffff';
+        textColor = '#000000';
+    }
+
     return `<svg width="456" height="100" xmlns="http://www.w3.org/2000/svg">
-        <rect width="456" height="100" fill="#fbfbfb" rx="6"/>
-        <text x="228" y="50" font-family="Arial" text-anchor="middle" fill="#666">
-            Not playing anything right now
+        <rect width="456" height="100" fill="${bgColor}" rx="6"/>
+        <text x="228" y="50" font-family="Arial" text-anchor="middle" fill="${textColor}">
+            ${escapeXml("Not playing anything right now")}
         </text>
     </svg>`;
 }

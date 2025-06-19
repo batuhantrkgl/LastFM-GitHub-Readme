@@ -6,6 +6,48 @@ const router = express.Router();
 const fetch = require('node-fetch').default;
 const { getLastFMUserInfo, getSessionKey, getNowPlaying } = require('./lastfm');
 const { generateNowPlayingSVG, generateFallbackSVG } = require('./svg');
+const { getAlbumCoverWithFallback, getAvatarWithFallback } = require('./media');
+
+/**
+ * Proxy endpoint for Last.fm avatar images with fallback to other sources
+ */
+router.get('/api/lastfm-image/avatar/:hash', async (req, res) => {
+    try {
+        // Get the hash from the path parameter
+        const { hash } = req.params;
+        const lastfmUrl = `https://lastfm.freetls.fastly.net/i/u/avatar/${hash}`;
+
+        // Try the original Last.fm URL first
+        let response = await fetch(lastfmUrl);
+        
+        if (!response.ok) {
+            // Fallback to the default avatar
+            const fallbackUrl = 'https://lastfm.freetls.fastly.net/i/u/avatar185s/2a96cbd8b46e442fc41c2b86b821562f.png';
+            response = await fetch(fallbackUrl);
+        }
+
+        if (!response.ok) {
+            return res.status(404).send('Avatar image not found');
+        }
+
+        // Forward the content type header
+        const contentType = response.headers.get('content-type');
+        if (contentType) {
+            res.setHeader('Content-Type', contentType);
+        }
+
+        // Set cache headers
+        res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 1 day
+        // Add Cross-Origin headers
+        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+
+        // Stream the response
+        response.body.pipe(res);
+    } catch (error) {
+        console.error('Last.fm avatar image proxy error:', error);
+        res.status(500).send('Error fetching avatar image');
+    }
+});
 
 /**
  * Callback route for Last.fm authentication
@@ -61,7 +103,12 @@ router.get('/api/nowplaying/:username', async (req, res) => {
 router.get('/api/widget/:username', async (req, res) => {
     try {
         const { username } = req.params;
+        const { theme = 'auto' } = req.query; // Extract theme from query parameters
         const nowPlaying = await getNowPlaying(username);
+
+        // Validate theme parameter
+        const validThemes = ['auto', 'dark', 'light'];
+        const validatedTheme = validThemes.includes(theme) ? theme : 'auto';
 
         res.setHeader('Content-Type', 'image/svg+xml');
         res.setHeader('Cache-Control', 'no-cache, max-age=0');
@@ -70,13 +117,13 @@ router.get('/api/widget/:username', async (req, res) => {
         res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
 
         if (!nowPlaying) {
-            return res.send(generateFallbackSVG());
+            return res.send(generateFallbackSVG(validatedTheme));
         }
 
-        res.send(await generateNowPlayingSVG(nowPlaying));
+        res.send(await generateNowPlayingSVG(nowPlaying, validatedTheme));
     } catch (error) {
         console.error('Widget error:', error);
-        res.send(generateFallbackSVG());
+        res.send(generateFallbackSVG('auto'));
     }
 });
 
@@ -113,14 +160,54 @@ router.get('/api/avatar/:username', async (req, res) => {
 
 /**
  * Proxy endpoint for Last.fm images to avoid cross-origin resource policy issues
+ * with fallback to Spotify and YouTube
  */
 router.get('/api/lastfm-image/:size/:hash', async (req, res) => {
     try {
         // Get the image URL from the path parameters
         const { size, hash } = req.params;
-        const fullUrl = `https://lastfm.freetls.fastly.net/i/u/${size}/${hash}`;
+        const lastfmUrl = `https://lastfm.freetls.fastly.net/i/u/${size}/${hash}`;
 
-        const response = await fetch(fullUrl);
+        // Check if this is an album cover request (typically 300x300)
+        if (size === '300x300') {
+            // Use the imported getAlbumCoverWithFallback function
+
+            // Get track info from query parameters if available
+            const { artist, track } = req.query;
+
+            if (artist && track) {
+                // Try to get the album cover with fallback
+                const imageUrl = await getAlbumCoverWithFallback(lastfmUrl, artist, track);
+
+                // Redirect to the image URL
+                if (imageUrl.startsWith('http')) {
+                    // For external URLs, fetch and proxy the image
+                    const response = await fetch(imageUrl);
+
+                    if (!response.ok) {
+                        return res.status(404).send('Image not found');
+                    }
+
+                    // Forward the content type header
+                    const contentType = response.headers.get('content-type');
+                    if (contentType) {
+                        res.setHeader('Content-Type', contentType);
+                    }
+
+                    // Set cache headers
+                    res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 1 day
+                    // Add Cross-Origin headers
+                    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+
+                    // Stream the response
+                    response.body.pipe(res);
+                    return;
+                }
+            }
+        }
+
+        // If not an album cover or no artist/track info, proceed with normal Last.fm request
+        const response = await fetch(lastfmUrl);
 
         if (!response.ok) {
             return res.status(404).send('Image not found');
@@ -139,58 +226,112 @@ router.get('/api/lastfm-image/:size/:hash', async (req, res) => {
 
         // Stream the response
         response.body.pipe(res);
-    } catch (error) {
-        console.error('Last.fm image proxy error:', error);
+    } catch (error) {        console.error('Last.fm image proxy error:', error);
         res.status(500).send('Error fetching image');
     }
 });
 
 /**
- * Proxy endpoint for Last.fm avatar images
+ * Favicon endpoint to prevent 404 errors
  */
-router.get('/api/lastfm-image/avatar/:hash', async (req, res) => {
-    try {
-        // Get the hash from the path parameter
-        const { hash } = req.params;
-        const fullUrl = `https://lastfm.freetls.fastly.net/i/u/avatar/${hash}`;
-
-        const response = await fetch(fullUrl);
-
-        if (!response.ok) {
-            return res.status(404).send('Avatar image not found');
-        }
-
-        // Forward the content type header
-        const contentType = response.headers.get('content-type');
-        if (contentType) {
-            res.setHeader('Content-Type', contentType);
-        }
-
-        // Set cache headers
-        res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 1 day
-        // Add Cross-Origin headers
-        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-
-        // Stream the response
-        response.body.pipe(res);
-    } catch (error) {
-        console.error('Last.fm avatar image proxy error:', error);
-        res.status(500).send('Error fetching avatar image');
-    }
+router.get('/favicon.ico', (req, res) => {
+    res.status(204).send(); // No content
 });
 
 /**
  * Fallback proxy endpoint for Last.fm images with any path format
  * This ensures backward compatibility with any existing URLs
+ * and provides fallbacks to Spotify and YouTube
  */
 router.get('/api/lastfm-image/*path', async (req, res) => {
     try {
         // Get the image URL from the path
         const imagePath = req.params.path || req.path.substring('/api/lastfm-image/'.length);
         const decodedPath = decodeURIComponent(imagePath);
-        const fullUrl = decodedPath.startsWith('http') ? decodedPath : `https://lastfm.freetls.fastly.net/i/u/${decodedPath}`;
+        const lastfmUrl = decodedPath.startsWith('http') ? decodedPath : `https://lastfm.freetls.fastly.net/i/u/${decodedPath}`;
 
-        const response = await fetch(fullUrl);
+        // Check if this might be an album cover request
+        const isAlbumCover = imagePath.includes('300x300') || imagePath.includes('174s') || imagePath.includes('large');
+
+        if (isAlbumCover) {
+            // Use the imported getAlbumCoverWithFallback function
+
+            // Get track info from query parameters if available
+            const { artist, track } = req.query;
+
+            if (artist && track) {
+                // Try to get the album cover with fallback
+                const imageUrl = await getAlbumCoverWithFallback(lastfmUrl, artist, track);
+
+                // Handle the image URL
+                if (imageUrl.startsWith('http')) {
+                    // For external URLs, fetch and proxy the image
+                    const response = await fetch(imageUrl);
+
+                    if (!response.ok) {
+                        return res.status(404).send('Image not found');
+                    }
+
+                    // Forward the content type header
+                    const contentType = response.headers.get('content-type');
+                    if (contentType) {
+                        res.setHeader('Content-Type', contentType);
+                    }
+
+                    // Set cache headers
+                    res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 1 day
+                    // Add Cross-Origin headers
+                    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+
+                    // Stream the response
+                    response.body.pipe(res);
+                    return;
+                }
+            }
+        }
+
+        // Check if this might be an avatar request
+        const isAvatar = imagePath.includes('avatar');
+
+        if (isAvatar) {
+            // Use the imported getAvatarWithFallback function
+
+            // Extract username from path or query
+            const username = req.query.username || imagePath.split('/').pop();
+
+            if (username) {
+                // Try to get the avatar with fallback
+                const imageUrl = await getAvatarWithFallback(lastfmUrl, username);
+
+                // Handle the image URL
+                if (imageUrl.startsWith('http')) {
+                    // For external URLs, fetch and proxy the image
+                    const response = await fetch(imageUrl);
+
+                    if (!response.ok) {
+                        return res.status(404).send('Image not found');
+                    }
+
+                    // Forward the content type header
+                    const contentType = response.headers.get('content-type');
+                    if (contentType) {
+                        res.setHeader('Content-Type', contentType);
+                    }
+
+                    // Set cache headers
+                    res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 1 day
+                    // Add Cross-Origin headers
+                    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+
+                    // Stream the response
+                    response.body.pipe(res);
+                    return;
+                }
+            }
+        }
+
+        // If no fallbacks were used, proceed with normal Last.fm request
+        const response = await fetch(lastfmUrl);
 
         if (!response.ok) {
             return res.status(404).send('Image not found');
@@ -213,6 +354,13 @@ router.get('/api/lastfm-image/*path', async (req, res) => {
         console.error('Last.fm fallback image proxy error:', error);
         res.status(500).send('Error fetching image');
     }
+});
+
+/**
+ * Debug route to test if routes are working
+ */
+router.get('/debug', (req, res) => {
+    res.json({ message: 'Routes are working', timestamp: new Date().toISOString() });
 });
 
 module.exports = router;

@@ -51,21 +51,31 @@ app.get('/', (req, res) => {
             <body>
                 <h1>Last.fm GitHub README Widget</h1>
                 <p>This service provides a widget to display your Last.fm "now playing" information in your GitHub README.</p>
-                
+
                 <h2>Usage</h2>
                 <p>Add the following to your GitHub README.md:</p>
                 <pre>![My Last.fm](${process.env.homepage_url || 'https://your-deployment-url.com'}/api/widget/YOUR_LASTFM_USERNAME)</pre>
-                
+
+                <h3>Theming</h3>
+                <p>You can customize the widget appearance with the <code>theme</code> query parameter:</p>
+                <ul>
+                    <li><code>?theme=auto</code> (default) - Uses colors extracted from the album art</li>
+                    <li><code>?theme=dark</code> - Dark theme with white text</li>
+                    <li><code>?theme=light</code> - Light theme with black text</li>
+                </ul>
+                <p>Example with theme:</p>
+                <pre>![My Last.fm](${process.env.homepage_url || 'https://your-deployment-url.com'}/api/widget/YOUR_LASTFM_USERNAME?theme=dark)</pre>
+
                 <h2>API Endpoints</h2>
                 <ul>
                     <li><code>/api/widget/:username</code> - Get an SVG widget showing your currently playing track</li>
                     <li><code>/api/nowplaying/:username</code> - Get JSON data about your currently playing track</li>
                 </ul>
-                
+
                 <h2>Example</h2>
                 <p>Here's an example of the widget:</p>
                 <img src="/api/widget/batuhantrkgl" alt="Example widget" />
-                
+
                 <p><a href="https://github.com/batuhantrkgl/LastFM-GitHub-Readme">View on GitHub</a></p>
             </body>
         </html>

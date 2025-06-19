@@ -129,7 +129,19 @@ async function getNowPlaying(username) {
         if (userData && userData.user && userData.user.image && Array.isArray(userData.user.image)) {
             const largeImage = userData.user.image.find(img => img.size === 'large');
             if (largeImage && largeImage['#text']) {
-                profileImage = largeImage['#text'];
+                // Check if it's a Last.fm URL and convert it to our proxy URL
+                const originalUrl = largeImage['#text'];
+                if (originalUrl.includes('lastfm.freetls.fastly.net')) {
+                    // Extract the path from the URL
+                    const urlParts = originalUrl.split('lastfm.freetls.fastly.net/i/u/');
+                    if (urlParts.length > 1) {
+                        profileImage = `/api/lastfm-image/${urlParts[1]}`;
+                    } else {
+                        profileImage = originalUrl;
+                    }
+                } else {
+                    profileImage = originalUrl;
+                }
             }
         }
 
@@ -148,7 +160,19 @@ async function getNowPlaying(username) {
         if (track.image && Array.isArray(track.image)) {
             const largeImage = track.image.find(img => img.size === 'large');
             if (largeImage && largeImage['#text']) {
-                trackImage = largeImage['#text'];
+                // Check if it's a Last.fm URL and convert it to our proxy URL
+                const originalUrl = largeImage['#text'];
+                if (originalUrl.includes('lastfm.freetls.fastly.net')) {
+                    // Extract the path from the URL
+                    const urlParts = originalUrl.split('lastfm.freetls.fastly.net/i/u/');
+                    if (urlParts.length > 1) {
+                        trackImage = `/api/lastfm-image/${urlParts[1]}?artist=${encodeURIComponent(artistName)}&track=${encodeURIComponent(trackName)}`;
+                    } else {
+                        trackImage = originalUrl;
+                    }
+                } else {
+                    trackImage = originalUrl;
+                }
             }
         }
 

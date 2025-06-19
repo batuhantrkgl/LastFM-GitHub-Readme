@@ -48,18 +48,36 @@ function getGithubAvatar(username) {
 }
 
 /**
- * Truncates a string if it exceeds a certain length
+ * Escapes special characters for XML
+ * @param {string} str - String to escape
+ * @returns {string} - Escaped string
+ */
+function escapeXml(str) {
+    if (!str) return '';
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
+}
+
+/**
+ * Truncates a string if it exceeds a certain length and escapes XML special characters
  * @param {string} str - String to truncate
  * @param {number} len - Maximum length
- * @returns {string} - Truncated string
+ * @returns {string} - Truncated and escaped string
  */
 function truncate(str, len) {
-    return str.length > len ? str.substring(0, len) + '...' : str;
+    if (!str) return '';
+    const truncated = str.length > len ? str.substring(0, len) + '...' : str;
+    return escapeXml(truncated);
 }
 
 module.exports = {
     generateSignature,
     isImageValid,
     getGithubAvatar,
+    escapeXml,
     truncate
 };
