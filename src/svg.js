@@ -11,22 +11,26 @@ const fetch = require('node-fetch').default;
  * @returns {Promise<string>} - Base64 data URL or fallback
  */
 async function imageToBase64(imageUrl) {
+    console.log('Converting image to base64:', imageUrl);
+    
     // If the URL is already a data URL, return it as is
     if (!imageUrl || imageUrl.startsWith('data:')) {
         return imageUrl || '';
     }
 
     // If it's a relative URL, convert to absolute
+    let absoluteUrl = imageUrl;
     if (imageUrl.startsWith('/')) {
-        imageUrl = `http://localhost:3000${imageUrl}`;
+        absoluteUrl = `http://localhost:3000${imageUrl}`;
     }
 
     try {
-        const response = await fetch(imageUrl, {
+        const response = await fetch(absoluteUrl, {
             headers: {
                 'User-Agent': 'GitHub-Readme-Widget/1.0'
             },
-            timeout: 10000 // 10 second timeout
+            timeout: 10000, // 10 second timeout
+            follow: 5 // Follow up to 5 redirects
         });
         
         if (!response.ok) {
@@ -47,9 +51,30 @@ async function imageToBase64(imageUrl) {
         }
         
         const base64 = buffer.toString('base64');
+        console.log(`Successfully converted ${imageUrl} to base64 (${buffer.length} bytes)`);
         return `data:${contentType};base64,${base64}`;
     } catch (error) {
         console.error('Error converting image to base64:', error, 'URL:', imageUrl);
+        
+        // For avatar URLs, try GitHub directly as fallback
+        if (imageUrl.includes('/api/avatar/')) {
+            const username = imageUrl.split('/api/avatar/')[1];
+            try {
+                console.log(`Trying direct GitHub avatar for ${username}`);
+                const githubUrl = `https://github.com/${username}.png`;
+                const response = await fetch(githubUrl, { timeout: 5000 });
+                
+                if (response.ok) {
+                    const buffer = await response.buffer();
+                    const base64 = buffer.toString('base64');
+                    console.log(`Successfully got GitHub avatar for ${username}`);
+                    return `data:image/png;base64,${base64}`;
+                }
+            } catch (githubError) {
+                console.error('GitHub avatar fallback failed:', githubError);
+            }
+        }
+        
         // Return a small transparent placeholder
         return 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
     }
@@ -129,7 +154,17 @@ async function generateNowPlayingSVG(data, theme = 'auto', username = 'default')
         track.image : 
         `/api/lastfm-image/300x300/2a96cbd8b46e442fc41c2b86b821562f.png?artist=${encodeURIComponent(track.artist)}&track=${encodeURIComponent(track.name)}`;
     
-    const userImageUrl = user.image || `/api/avatar/${username}`;
+    // For user images, prefer direct GitHub URL for base64 conversion to avoid proxy issues
+    let userImageUrl = user.image || `/api/avatar/${username}`;
+    if (userImageUrl.includes('/api/avatar/')) {
+        // Extract username and use direct GitHub URL
+        const avatarUsername = userImageUrl.split('/api/avatar/')[1] || username;
+        userImageUrl = `https://github.com/${avatarUsername}.png`;
+    }
+    
+    console.log('SVG Generation - Album Image URL:', albumImageUrl);
+    console.log('SVG Generation - User Image URL:', userImageUrl);
+    console.log('SVG Generation - User object:', JSON.stringify(user, null, 2));
     
     const [albumImageBase64, userImageBase64] = await Promise.all([
         imageToBase64(albumImageUrl),
