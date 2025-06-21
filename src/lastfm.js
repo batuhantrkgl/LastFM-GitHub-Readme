@@ -3,6 +3,7 @@
  */
 const fetch = require('node-fetch').default;
 const { generateSignature, isImageValid, getGithubAvatar } = require('./utils');
+const { getAlbumCoverWithFallback, getLastFMAlbumCover } = require('./media');
 
 // Simple in-memory cache with expiration
 const cache = {
@@ -153,36 +154,39 @@ async function getNowPlaying(username) {
         // Safely extract track properties with fallbacks
         const trackName = track.name || 'Unknown Track';
         const artistName = track.artist && track.artist['#text'] ? track.artist['#text'] : 'Unknown Artist';
-        const albumName = track.album && track.album['#text'] ? track.album['#text'] : 'Unknown Album';
-
-        // Safely extract track image
+        const albumName = track.album && track.album['#text'] ? track.album['#text'] : 'Unknown Album';        // Safely extract track image with enhanced fallback logic
         let trackImage = '';
+        
+        // First, try to get the image from the recent tracks data
         if (track.image && Array.isArray(track.image)) {
             const largeImage = track.image.find(img => img.size === 'large');
-            if (largeImage && largeImage['#text']) {
-                // Check if it's a Last.fm URL and convert it to our proxy URL
-                const originalUrl = largeImage['#text'];
-                if (originalUrl.includes('lastfm.freetls.fastly.net')) {
-                    // Extract the path from the URL
-                    const urlParts = originalUrl.split('lastfm.freetls.fastly.net/i/u/');
-                    if (urlParts.length > 1) {
-                        trackImage = `/api/lastfm-image/${urlParts[1]}?artist=${encodeURIComponent(artistName)}&track=${encodeURIComponent(trackName)}`;
-                    } else {
-                        trackImage = originalUrl;
-                    }
-                } else {
-                    trackImage = originalUrl;
-                }
+            if (largeImage && largeImage['#text'] && !largeImage['#text'].includes('2a96cbd8b46e442fc41c2b86b821562f')) {
+                trackImage = largeImage['#text'];
+            }
+        }
+
+        // If no good image from recent tracks, try Last.fm track.getInfo API
+        if (!trackImage) {
+            trackImage = await getLastFMAlbumCover(artistName, trackName);
+        }
+
+        // If Last.fm doesn't have a good image, use our fallback chain (Spotify -> YouTube)
+        if (!trackImage) {
+            trackImage = await getAlbumCoverWithFallback(null, artistName, trackName);
+        } else if (trackImage.includes('lastfm.freetls.fastly.net')) {
+            // Convert Last.fm URL to our proxy URL for better fallback handling
+            const urlParts = trackImage.split('lastfm.freetls.fastly.net/i/u/');
+            if (urlParts.length > 1) {
+                trackImage = `/api/lastfm-image/${urlParts[1]}?artist=${encodeURIComponent(artistName)}&track=${encodeURIComponent(trackName)}`;
             }
         }
 
         const result = {
-            isPlaying,
-            track: {
+            isPlaying,            track: {
                 name: trackName,
                 artist: artistName,
                 album: albumName,
-                image: trackImage || '/api/lastfm-image/300x300/2a96cbd8b46e442fc41c2b86b821562f.png',
+                image: trackImage || await getAlbumCoverWithFallback(null, artistName, trackName),
                 url: track.url || '#',
                 timestamp
             },
@@ -193,9 +197,7 @@ async function getNowPlaying(username) {
 
         // Cache for a shorter time if currently playing (30 seconds), longer if not (5 minutes)
         const cacheTTL = isPlaying ? 30 : 300;
-        cache.set(cacheKey, result, cacheTTL);
-
-        return result;
+        cache.set(cacheKey, result, cacheTTL);        return result;
     } catch (error) {
         console.error('Error fetching now playing:', error);
         return null;

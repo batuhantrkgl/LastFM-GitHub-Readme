@@ -166,9 +166,7 @@ router.get('/api/lastfm-image/:size/:hash', async (req, res) => {
     try {
         // Get the image URL from the path parameters
         const { size, hash } = req.params;
-        const lastfmUrl = `https://lastfm.freetls.fastly.net/i/u/${size}/${hash}`;
-
-        // Check if this is an album cover request (typically 300x300)
+        const lastfmUrl = `https://lastfm.freetls.fastly.net/i/u/${size}/${hash}`;        // Check if this is an album cover request (typically 300x300)
         if (size === '300x300') {
             // Use the imported getAlbumCoverWithFallback function
 
@@ -176,8 +174,10 @@ router.get('/api/lastfm-image/:size/:hash', async (req, res) => {
             const { artist, track } = req.query;
 
             if (artist && track) {
+                console.log(`Album cover request for: ${artist} - ${track}`);
                 // Try to get the album cover with fallback
                 const imageUrl = await getAlbumCoverWithFallback(lastfmUrl, artist, track);
+                console.log(`getAlbumCoverWithFallback returned: ${imageUrl}`);
 
                 // Redirect to the image URL
                 if (imageUrl.startsWith('http')) {

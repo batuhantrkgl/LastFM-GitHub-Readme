@@ -24,9 +24,49 @@ const mediaCache = {
         this.data[key] = {
             value,
             expiry: Date.now() + (ttlSeconds * 1000)
-        };
-    }
+        };    }
 };
+
+/**
+ * Gets album cover from Last.fm track.getInfo API
+ * @param {string} artist - Artist name
+ * @param {string} track - Track name
+ * @returns {Promise<string|null>} - Album cover URL or null if not found
+ */
+async function getLastFMAlbumCover(artist, track) {
+    try {
+        const response = await fetch(
+            `https://ws.audioscrobbler.com/2.0/?method=track.getinfo&api_key=${process.env.API_KEY}&artist=${encodeURIComponent(artist)}&track=${encodeURIComponent(track)}&format=json`
+        );
+
+        if (!response.ok) {
+            return null;
+        }
+
+        const data = await response.json();
+        
+        if (!data.track || !data.track.album || !data.track.album.image) {
+            return null;
+        }
+
+        // Get the largest available image
+        const images = data.track.album.image;
+        if (Array.isArray(images)) {
+            const largeImage = images.find(img => img.size === 'extralarge') || 
+                             images.find(img => img.size === 'large') ||
+                             images.find(img => img.size === 'medium');
+            
+            if (largeImage && largeImage['#text'] && !largeImage['#text'].includes('2a96cbd8b46e442fc41c2b86b821562f')) {
+                return largeImage['#text'];
+            }
+        }
+
+        return null;
+    } catch (error) {
+        console.error('Error getting Last.fm album cover:', error);
+        return null;
+    }
+}
 
 /**
  * Checks if a URL is accessible
@@ -53,39 +93,66 @@ async function getAlbumCoverWithFallback(lastfmUrl, artist, track) {
     // Generate a cache key based on the inputs
     const cacheKey = `album_cover_${artist}_${track}`;
     const cachedUrl = mediaCache.get(cacheKey);
-    if (cachedUrl) return cachedUrl;
+    if (cachedUrl) {
+        console.log(`Cache hit for ${artist} - ${track}: ${cachedUrl}`);
+        return cachedUrl;
+    }    console.log(`Searching album cover for: ${artist} - ${track}`);
 
     try {
-        // Try Last.fm URL first
-        if (lastfmUrl && !lastfmUrl.startsWith('/')) {
-            // Check if it's a Last.fm URL and convert it to our proxy URL
-            if (lastfmUrl.includes('lastfm.freetls.fastly.net')) {
-                // Extract the path from the URL
-                const urlParts = lastfmUrl.split('lastfm.freetls.fastly.net/i/u/');
-                if (urlParts.length > 1) {
-                    const proxyUrl = `/api/lastfm-image/${urlParts[1]}?artist=${encodeURIComponent(artist)}&track=${encodeURIComponent(track)}`;
-                    mediaCache.set(cacheKey, proxyUrl);
-                    return proxyUrl;
-                }
-            }
-
-            // If it's not a Last.fm URL or we couldn't extract the path, use the original URL
-            if (await isUrlAccessible(lastfmUrl)) {
-                mediaCache.set(cacheKey, lastfmUrl);
-                return lastfmUrl;
+        // Try Last.fm API first if we don't have a good URL
+        if (!lastfmUrl || lastfmUrl.startsWith('/') || 
+            lastfmUrl.includes('2a96cbd8b46e442fc41c2b86b821562f') || 
+            lastfmUrl.includes('818148bf1c8f4d4bcb96427dfa5c42b7')) {
+            console.log(`Getting Last.fm album cover via API for: ${artist} - ${track}`);
+            const lastfmApiUrl = await getLastFMAlbumCover(artist, track);
+            if (lastfmApiUrl) {
+                console.log(`Last.fm API success: ${lastfmApiUrl}`);
+                mediaCache.set(cacheKey, lastfmApiUrl);
+                return lastfmApiUrl;
             }
         }
 
-        // Try Spotify as first fallback
+        // Try Last.fm URL first
+        if (lastfmUrl && !lastfmUrl.startsWith('/')) {
+            console.log(`Checking Last.fm URL: ${lastfmUrl}`);
+            
+            // Check if this is a known default/placeholder image hash
+            const isDefaultHash = lastfmUrl.includes('2a96cbd8b46e442fc41c2b86b821562f') || 
+                                  lastfmUrl.includes('818148bf1c8f4d4bcb96427dfa5c42b7');
+            
+            if (!isDefaultHash && await isUrlAccessible(lastfmUrl)) {
+                // For Last.fm URLs, we should check if it's not a default image
+                // Default/placeholder images are usually very small
+                try {
+                    const response = await fetch(lastfmUrl, { method: 'HEAD' });
+                    const contentLength = response.headers.get('content-length');
+                    if (contentLength && parseInt(contentLength) > 5000) {
+                        console.log(`Last.fm URL is valid with size: ${contentLength}`);
+                        mediaCache.set(cacheKey, lastfmUrl);
+                        return lastfmUrl;
+                    } else {
+                        console.log(`Last.fm URL too small (${contentLength}), likely placeholder`);
+                    }
+                } catch (err) {
+                    console.log(`Error checking Last.fm URL: ${err.message}`);
+                }
+            } else {
+                console.log(`Last.fm URL is default hash or not accessible`);
+            }
+        }// Try Spotify as first fallback
+        console.log(`Last.fm failed, trying Spotify for: ${artist} - ${track}`);
         const spotifyUrl = await getSpotifyAlbumCover(artist, track);
         if (spotifyUrl) {
+            console.log(`Spotify success: ${spotifyUrl}`);
             mediaCache.set(cacheKey, spotifyUrl);
             return spotifyUrl;
         }
 
         // Try YouTube as second fallback
+        console.log(`Spotify failed, trying YouTube for: ${artist} - ${track}`);
         const youtubeUrl = await getYouTubeThumbnail(artist, track);
         if (youtubeUrl) {
+            console.log(`YouTube success: ${youtubeUrl}`);
             mediaCache.set(cacheKey, youtubeUrl);
             return youtubeUrl;
         }
@@ -152,5 +219,6 @@ async function getAvatarWithFallback(lastfmUrl, username) {
 module.exports = {
     getAlbumCoverWithFallback,
     getAvatarWithFallback,
-    isUrlAccessible
+    isUrlAccessible,
+    getLastFMAlbumCover
 };
