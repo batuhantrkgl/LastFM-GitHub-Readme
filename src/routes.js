@@ -120,7 +120,7 @@ router.get('/api/widget/:username', async (req, res) => {
             return res.send(generateFallbackSVG(validatedTheme));
         }
 
-        res.send(await generateNowPlayingSVG(nowPlaying, validatedTheme));
+        res.send(await generateNowPlayingSVG(nowPlaying, validatedTheme, username));
     } catch (error) {
         console.error('Widget error:', error);
         res.send(generateFallbackSVG('auto'));
@@ -236,6 +236,93 @@ router.get('/api/lastfm-image/:size/:hash', async (req, res) => {
  */
 router.get('/favicon.ico', (req, res) => {
     res.status(204).send(); // No content
+});
+
+/**
+ * Proxy endpoint for Last.fm avatar images with GitHub fallback
+ */
+router.get('/api/lastfm-image/avatar/:hash/:username', async (req, res) => {
+    try {
+        const { hash, username } = req.params;
+        
+        // Try Last.fm avatar first with different size formats
+        const lastfmUrls = [
+            `https://lastfm.freetls.fastly.net/i/u/avatar/${hash}`,
+            `https://lastfm.freetls.fastly.net/i/u/avatar/${hash}.png`,
+            `https://lastfm.freetls.fastly.net/i/u/avatar185s/${hash}`,
+            `https://lastfm.freetls.fastly.net/i/u/avatar185s/${hash}.png`
+        ];
+
+        for (const lastfmUrl of lastfmUrls) {
+            try {
+                const response = await fetch(lastfmUrl);
+                if (response.ok) {
+                    // Check if this is Last.fm's default/placeholder avatar
+                    const contentLength = response.headers.get('content-length');
+                    
+                    // Last.fm's default avatar is usually very small (around 500-1000 bytes)
+                    // If the image is reasonably sized, it's likely a real profile picture
+                    if (!contentLength || parseInt(contentLength) > 1500) {
+                        const contentType = response.headers.get('content-type');
+                        if (contentType) {
+                            res.setHeader('Content-Type', contentType);
+                        }
+
+                        res.setHeader('Cache-Control', 'public, max-age=86400');
+                        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+
+                        return response.body.pipe(res);
+                    }
+                }
+            } catch (err) {
+                console.log(`Last.fm URL failed: ${lastfmUrl}`, err.message);
+            }
+        }
+
+        // If Last.fm fails or returns a default avatar, try GitHub avatar
+        if (username) {
+            try {
+                const githubUrl = `https://github.com/${username}.png`;
+                const githubResponse = await fetch(githubUrl);
+                
+                if (githubResponse.ok) {
+                    const contentType = githubResponse.headers.get('content-type');
+                    if (contentType) {
+                        res.setHeader('Content-Type', contentType);
+                    }
+
+                    res.setHeader('Cache-Control', 'public, max-age=86400');
+                    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+
+                    return githubResponse.body.pipe(res);
+                }
+            } catch (err) {
+                console.log(`GitHub URL failed for user: ${username}`, err.message);
+            }
+        }
+
+        // Final fallback to default Last.fm avatar
+        const fallbackUrl = 'https://lastfm.freetls.fastly.net/i/u/avatar185s/2a96cbd8b46e442fc41c2b86b821562f.png';
+        const fallbackResponse = await fetch(fallbackUrl);
+        
+        if (!fallbackResponse.ok) {
+            return res.status(404).send('Avatar image not found');
+        }
+
+        const contentType = fallbackResponse.headers.get('content-type');
+        if (contentType) {
+            res.setHeader('Content-Type', contentType);
+        }
+
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+
+        fallbackResponse.body.pipe(res);
+
+    } catch (error) {
+        console.error('Avatar proxy error:', error);
+        res.status(500).send('Error fetching avatar image');
+    }
 });
 
 /**

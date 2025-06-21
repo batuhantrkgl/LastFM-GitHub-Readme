@@ -41,7 +41,7 @@ async function extractColors(imageUrl) {
  * @param {Object} data - Now playing data
  * @returns {Promise<string>} - SVG markup
  */
-async function generateNowPlayingSVG(data, theme = 'auto') {
+async function generateNowPlayingSVG(data, theme = 'auto', username = 'default') {
     // Validate input data
     if (!data || !data.track || !data.user) {
         console.error('Invalid data provided to generateNowPlayingSVG');
@@ -104,9 +104,8 @@ async function generateNowPlayingSVG(data, theme = 'auto') {
         <!-- User Profile Picture -->
         <clipPath id="profilePic">
             <circle cx="420" cy="30" r="15"/>
-        </clipPath>
-        <image x="405" y="15" width="30" height="30" clip-path="url(#profilePic)"
-            href="${user.image && !user.image.startsWith('/') ? user.image : '/api/lastfm-image/avatar/818148bf1c8f4d4bcb96427dfa5c42b7'}"
+        </clipPath>        <image x="405" y="15" width="30" height="30" clip-path="url(#profilePic)"
+            href="${user.image || `/api/avatar/${username}`}"
         />
 
         <!-- Playing Animation -->

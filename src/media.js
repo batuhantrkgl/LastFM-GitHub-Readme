@@ -112,33 +112,35 @@ async function getAvatarWithFallback(lastfmUrl, username) {
     const cachedUrl = mediaCache.get(cacheKey);
     if (cachedUrl) return cachedUrl;
 
-    try {
-        // Try Last.fm URL first
+    try {        // Try Last.fm URL first
         if (lastfmUrl && !lastfmUrl.startsWith('/')) {
-            // Check if it's a Last.fm URL and convert it to our proxy URL
+            // Check if it's a Last.fm URL and convert it to our enhanced proxy URL
             if (lastfmUrl.includes('lastfm.freetls.fastly.net')) {
-                // Extract the path from the URL
+                // Extract the hash from the URL
                 const urlParts = lastfmUrl.split('lastfm.freetls.fastly.net/i/u/');
                 if (urlParts.length > 1) {
-                    const proxyUrl = `/api/lastfm-image/${urlParts[1]}`;
+                    const pathPart = urlParts[1];
+                    // Extract just the hash (remove any size prefix and file extension)
+                    const hash = pathPart.replace(/^(avatar|avatar185s|300x300|174s|large)\//, '').replace(/\.(png|jpg|jpeg)$/i, '');
+                    
+                    // Use the enhanced avatar route that includes GitHub fallback
+                    const proxyUrl = `/api/lastfm-image/avatar/${hash}/${username}`;
                     mediaCache.set(cacheKey, proxyUrl);
                     return proxyUrl;
                 }
             }
 
-            // If it's not a Last.fm URL or we couldn't extract the path, use the original URL
+            // If it's not a Last.fm URL, check if it's accessible
             if (await isUrlAccessible(lastfmUrl)) {
                 mediaCache.set(cacheKey, lastfmUrl);
                 return lastfmUrl;
             }
-        }
-
-        // Try GitHub avatar as fallback
+        }        // If Last.fm URL is not available or accessible, try GitHub directly
         const githubUrl = `https://github.com/${username}.png`;
         if (await isUrlAccessible(githubUrl)) {
             mediaCache.set(cacheKey, githubUrl);
             return githubUrl;
-        }        // Return a default avatar if all fallbacks fail - use a direct external URL to avoid recursion
+        }// Return a default avatar if all fallbacks fail - use a direct external URL to avoid recursion
         const defaultUrl = 'https://lastfm.freetls.fastly.net/i/u/avatar185s/2a96cbd8b46e442fc41c2b86b821562f.png';
         mediaCache.set(cacheKey, defaultUrl);
         return defaultUrl;
