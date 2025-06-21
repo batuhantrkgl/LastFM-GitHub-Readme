@@ -3,6 +3,57 @@
  */
 const { Vibrant } = require('node-vibrant/node');
 const { truncate, escapeXml } = require('./utils');
+const fetch = require('node-fetch').default;
+
+/**
+ * Converts an image URL to a base64 data URL
+ * @param {string} imageUrl - URL of the image to convert
+ * @returns {Promise<string>} - Base64 data URL or fallback
+ */
+async function imageToBase64(imageUrl) {
+    // If the URL is already a data URL, return it as is
+    if (!imageUrl || imageUrl.startsWith('data:')) {
+        return imageUrl || '';
+    }
+
+    // If it's a relative URL, convert to absolute
+    if (imageUrl.startsWith('/')) {
+        imageUrl = `http://localhost:3000${imageUrl}`;
+    }
+
+    try {
+        const response = await fetch(imageUrl, {
+            headers: {
+                'User-Agent': 'GitHub-Readme-Widget/1.0'
+            },
+            timeout: 10000 // 10 second timeout
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const buffer = await response.buffer();
+        
+        // Check if the response is actually an image
+        const contentType = response.headers.get('content-type') || 'image/png';
+        if (!contentType.startsWith('image/')) {
+            throw new Error(`Not an image: ${contentType}`);
+        }
+
+        // Limit image size to prevent huge base64 strings
+        if (buffer.length > 500000) { // 500KB limit
+            throw new Error('Image too large');
+        }
+        
+        const base64 = buffer.toString('base64');
+        return `data:${contentType};base64,${base64}`;
+    } catch (error) {
+        console.error('Error converting image to base64:', error, 'URL:', imageUrl);
+        // Return a small transparent placeholder
+        return 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    }
+}
 
 /**
  * Extracts color palette from an image URL
@@ -71,9 +122,19 @@ async function generateNowPlayingSVG(data, theme = 'auto', username = 'default')
             text: '#000000',
             accent: colors.accent || '#1DB954'
         };
-    }
+    }    const timeAgo = isPlaying ? 'Now playing' : `${Math.floor((Date.now() - (track.timestamp || Date.now())) / 60000)}m ago`;
 
-    const timeAgo = isPlaying ? 'Now playing' : `${Math.floor((Date.now() - (track.timestamp || Date.now())) / 60000)}m ago`;
+    // Convert images to base64 for GitHub compatibility
+    const albumImageUrl = track.image && !track.image.startsWith('/') ? 
+        track.image : 
+        `/api/lastfm-image/300x300/2a96cbd8b46e442fc41c2b86b821562f.png?artist=${encodeURIComponent(track.artist)}&track=${encodeURIComponent(track.name)}`;
+    
+    const userImageUrl = user.image || `/api/avatar/${username}`;
+    
+    const [albumImageBase64, userImageBase64] = await Promise.all([
+        imageToBase64(albumImageUrl),
+        imageToBase64(userImageUrl)
+    ]);
 
     return `
     <svg width="456" height="100" xmlns="http://www.w3.org/2000/svg">
@@ -91,21 +152,20 @@ async function generateNowPlayingSVG(data, theme = 'auto', username = 'default')
         <g clip-path="url(#round-corners)">
             <rect width="456" height="100" fill="url(#background)"/>
             <rect width="456" height="100" fill="rgba(0,0,0,0.1)"/>
-        </g>
-
-        <!-- Album Art -->
+        </g>        <!-- Album Art -->
         <clipPath id="albumArt">
             <rect x="20" y="15" width="70" height="70" rx="4"/>
         </clipPath>
         <image x="20" y="15" width="70" height="70" clip-path="url(#albumArt)"
-            href="${escapeXml(track.image && !track.image.startsWith('/') ? track.image : `/api/lastfm-image/300x300/2a96cbd8b46e442fc41c2b86b821562f.png?artist=${encodeURIComponent(track.artist)}&track=${encodeURIComponent(track.name)}`)}"
+            href="${albumImageBase64}"
         />
 
         <!-- User Profile Picture -->
         <clipPath id="profilePic">
             <circle cx="420" cy="30" r="15"/>
-        </clipPath>        <image x="405" y="15" width="30" height="30" clip-path="url(#profilePic)"
-            href="${user.image || `/api/avatar/${username}`}"
+        </clipPath>
+        <image x="405" y="15" width="30" height="30" clip-path="url(#profilePic)"
+            href="${userImageBase64}"
         />
 
         <!-- Playing Animation -->
