@@ -6,22 +6,38 @@ const { truncate, escapeXml } = require('./utils');
 const fetch = require('node-fetch').default;
 
 /**
+ * Get the base URL for the current environment
+ */
+function getBaseUrl() {
+    // Check if we're in production
+    if (process.env.NODE_ENV === 'production') {
+        // Use the production URL from environment variable or a default
+        return process.env.BASE_URL || process.env.homepage_url || 'https://lastfm-api.batuhantrkgl.tech';
+    }
+    
+    // For development
+    return process.env.homepage_url || `http://localhost:${process.env.PORT || 3000}`;
+}
+
+/**
  * Converts an image URL to a base64 data URL
  * @param {string} imageUrl - URL of the image to convert
  * @returns {Promise<string>} - Base64 data URL or fallback
  */
 async function imageToBase64(imageUrl) {
     console.log('Converting image to base64:', imageUrl);
-    
+
     // If the URL is already a data URL, return it as is
     if (!imageUrl || imageUrl.startsWith('data:')) {
         return imageUrl || '';
     }
 
-    // If it's a relative URL, convert to absolute
+    // If it's a relative URL, convert to absolute using the correct base URL
     let absoluteUrl = imageUrl;
     if (imageUrl.startsWith('/')) {
-        absoluteUrl = `http://localhost:3000${imageUrl}`;
+        const baseUrl = getBaseUrl();
+        absoluteUrl = `${baseUrl}${imageUrl}`;
+        console.log('Converted relative URL to:', absoluteUrl);
     }
 
     try {
@@ -32,16 +48,18 @@ async function imageToBase64(imageUrl) {
             timeout: 10000, // 10 second timeout
             follow: 5 // Follow up to 5 redirects
         });
-        
+
         if (!response.ok) {
+            console.error(`HTTP error for ${absoluteUrl}! status: ${response.status}`);
             throw new Error(`HTTP error! status: ${response.status}`);
         }
 
         const buffer = await response.buffer();
-        
+
         // Check if the response is actually an image
         const contentType = response.headers.get('content-type') || 'image/png';
         if (!contentType.startsWith('image/')) {
+            console.error(`Not an image: ${contentType} for URL: ${absoluteUrl}`);
             throw new Error(`Not an image: ${contentType}`);
         }
 
@@ -49,13 +67,13 @@ async function imageToBase64(imageUrl) {
         if (buffer.length > 500000) { // 500KB limit
             throw new Error('Image too large');
         }
-        
+
         const base64 = buffer.toString('base64');
         console.log(`Successfully converted ${imageUrl} to base64 (${buffer.length} bytes)`);
         return `data:${contentType};base64,${base64}`;
     } catch (error) {
         console.error('Error converting image to base64:', error, 'URL:', imageUrl);
-        
+
         // For avatar URLs, try GitHub directly as fallback
         if (imageUrl.includes('/api/avatar/')) {
             const username = imageUrl.split('/api/avatar/')[1];
@@ -63,7 +81,7 @@ async function imageToBase64(imageUrl) {
                 console.log(`Trying direct GitHub avatar for ${username}`);
                 const githubUrl = `https://github.com/${username}.png`;
                 const response = await fetch(githubUrl, { timeout: 5000 });
-                
+
                 if (response.ok) {
                     const buffer = await response.buffer();
                     const base64 = buffer.toString('base64');
@@ -74,7 +92,7 @@ async function imageToBase64(imageUrl) {
                 console.error('GitHub avatar fallback failed:', githubError);
             }
         }
-        
+
         // Return a small transparent placeholder
         return 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
     }
@@ -118,9 +136,22 @@ async function extractColors(imageUrl) {
  * @returns {Promise<string>} - SVG markup
  */
 async function generateNowPlayingSVG(data, theme = 'auto', username = 'default') {
+    // Add more detailed logging for debugging
+    console.log('generateNowPlayingSVG called with:', {
+        hasData: !!data,
+        hasTrack: !!(data && data.track),
+        hasUser: !!(data && data.user),
+        theme,
+        username
+    });
+
     // Validate input data
     if (!data || !data.track || !data.user) {
-        console.error('Invalid data provided to generateNowPlayingSVG');
+        console.error('Invalid data provided to generateNowPlayingSVG', {
+            data: data ? 'exists' : 'null',
+            track: data?.track ? 'exists' : 'null',
+            user: data?.user ? 'exists' : 'null'
+        });
         return generateFallbackSVG(theme);
     }
 
@@ -128,7 +159,11 @@ async function generateNowPlayingSVG(data, theme = 'auto', username = 'default')
 
     // Ensure track has all required properties
     if (!track.name || !track.artist || !track.album) {
-        console.error('Track data is missing required properties');
+        console.error('Track data is missing required properties', {
+            hasName: !!track.name,
+            hasArtist: !!track.artist,
+            hasAlbum: !!track.album
+        });
         return generateFallbackSVG(theme);
     }
 
@@ -147,13 +182,15 @@ async function generateNowPlayingSVG(data, theme = 'auto', username = 'default')
             text: '#000000',
             accent: colors.accent || '#1DB954'
         };
-    }    const timeAgo = isPlaying ? 'Now playing' : `${Math.floor((Date.now() - (track.timestamp || Date.now())) / 60000)}m ago`;
+    }
+
+    const timeAgo = isPlaying ? 'Now playing' : `${Math.floor((Date.now() - (track.timestamp || Date.now())) / 60000)}m ago`;
 
     // Convert images to base64 for GitHub compatibility
-    const albumImageUrl = track.image && !track.image.startsWith('/') ? 
-        track.image : 
+    const albumImageUrl = track.image && !track.image.startsWith('/') ?
+        track.image :
         `/api/lastfm-image/300x300/2a96cbd8b46e442fc41c2b86b821562f.png?artist=${encodeURIComponent(track.artist)}&track=${encodeURIComponent(track.name)}`;
-    
+
     // For user images, prefer direct GitHub URL for base64 conversion to avoid proxy issues
     let userImageUrl = user.image || `/api/avatar/${username}`;
     if (userImageUrl.includes('/api/avatar/')) {
@@ -161,11 +198,11 @@ async function generateNowPlayingSVG(data, theme = 'auto', username = 'default')
         const avatarUsername = userImageUrl.split('/api/avatar/')[1] || username;
         userImageUrl = `https://github.com/${avatarUsername}.png`;
     }
-    
+
     console.log('SVG Generation - Album Image URL:', albumImageUrl);
     console.log('SVG Generation - User Image URL:', userImageUrl);
     console.log('SVG Generation - User object:', JSON.stringify(user, null, 2));
-    
+
     const [albumImageBase64, userImageBase64] = await Promise.all([
         imageToBase64(albumImageUrl),
         imageToBase64(userImageUrl)
@@ -187,7 +224,9 @@ async function generateNowPlayingSVG(data, theme = 'auto', username = 'default')
         <g clip-path="url(#round-corners)">
             <rect width="456" height="100" fill="url(#background)"/>
             <rect width="456" height="100" fill="rgba(0,0,0,0.1)"/>
-        </g>        <!-- Album Art -->
+        </g>
+
+        <!-- Album Art -->
         <clipPath id="albumArt">
             <rect x="20" y="15" width="70" height="70" rx="4"/>
         </clipPath>
