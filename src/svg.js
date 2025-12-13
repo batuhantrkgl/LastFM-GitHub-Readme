@@ -14,9 +14,10 @@ function getBaseUrl() {
         // Use the production URL from environment variable or a default
         return process.env.BASE_URL || process.env.homepage_url || 'https://lastfm-api.batuhantrkgl.tech';
     }
-    
-    // For development
-    return process.env.homepage_url || `http://localhost:${process.env.PORT || 3000}`;
+
+    // For development: always use localhost to avoid DNS failures when offline
+    // Optional override: BASE_URL_DEV
+    return process.env.BASE_URL_DEV || `http://localhost:${process.env.PORT || 3000}`;
 }
 
 /**
