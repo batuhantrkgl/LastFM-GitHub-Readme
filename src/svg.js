@@ -209,64 +209,94 @@ async function generateNowPlayingSVG(data, theme = 'auto', username = 'default')
         imageToBase64(userImageUrl)
     ]);
 
+    // Generate equalizer bars animation
+    const equalizer = isPlaying ? `
+        <g transform="translate(105, 50)">
+            <rect x="0" y="-3" width="3" height="6" fill="${colors.accent}" rx="1">
+                <animate attributeName="height" values="6;14;6" dur="0.8s" repeatCount="indefinite" />
+                <animate attributeName="y" values="-3;-7;-3" dur="0.8s" repeatCount="indefinite" />
+            </rect>
+            <rect x="5" y="-6" width="3" height="12" fill="${colors.accent}" rx="1">
+                <animate attributeName="height" values="12;6;12" dur="0.85s" repeatCount="indefinite" />
+                <animate attributeName="y" values="-6;-3;-6" dur="0.85s" repeatCount="indefinite" />
+            </rect>
+            <rect x="10" y="-4" width="3" height="8" fill="${colors.accent}" rx="1">
+                <animate attributeName="height" values="8;16;8" dur="0.9s" repeatCount="indefinite" />
+                <animate attributeName="y" values="-4;-8;-4" dur="0.9s" repeatCount="indefinite" />
+            </rect>
+            <rect x="15" y="-3" width="3" height="6" fill="${colors.accent}" rx="1">
+                <animate attributeName="height" values="6;10;6" dur="0.95s" repeatCount="indefinite" />
+                <animate attributeName="y" values="-3;-5;-3" dur="0.95s" repeatCount="indefinite" />
+            </rect>
+        </g>` : '';
+
+    const fontStack = "-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif";
+
     return `
-    <svg width="456" height="100" xmlns="http://www.w3.org/2000/svg">
+    <svg width="456" height="110" viewBox="0 0 456 110" xmlns="http://www.w3.org/2000/svg">
         <defs>
-            <linearGradient id="background" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" style="stop-color:${colors.background};stop-opacity:0.8" />
-                <stop offset="100%" style="stop-color:${colors.background};stop-opacity:0.2" />
+            <linearGradient id="background" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:${colors.background};stop-opacity:1" />
+                <stop offset="100%" style="stop-color:${colors.background};stop-opacity:0.85" />
+            </linearGradient>
+            <linearGradient id="overlay" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" style="stop-color:${colors.accent};stop-opacity:0.1" />
+                <stop offset="100%" style="stop-color:${colors.accent};stop-opacity:0.05" />
             </linearGradient>
             <clipPath id="round-corners">
-                <rect width="456" height="100" rx="6"/>
+                <rect width="456" height="110" rx="12"/>
             </clipPath>
+            <clipPath id="albumArt">
+                <rect x="20" y="20" width="70" height="70" rx="6"/>
+            </clipPath>
+            <clipPath id="profilePic">
+                <circle cx="420" cy="30" r="16"/>
+            </clipPath>
+            <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+                <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000000" flood-opacity="0.15"/>
+            </filter>
         </defs>
 
         <!-- Background -->
         <g clip-path="url(#round-corners)">
-            <rect width="456" height="100" fill="url(#background)"/>
-            <rect width="456" height="100" fill="rgba(0,0,0,0.1)"/>
+            <rect width="456" height="110" fill="url(#background)"/>
+            <rect width="456" height="110" fill="url(#overlay)"/>
         </g>
 
         <!-- Album Art -->
-        <clipPath id="albumArt">
-            <rect x="20" y="15" width="70" height="70" rx="4"/>
-        </clipPath>
-        <image x="20" y="15" width="70" height="70" clip-path="url(#albumArt)"
+        <rect x="19" y="19" width="72" height="72" fill="rgba(0,0,0,0.1)" rx="7"/> <!-- Shadow border -->
+        <image x="20" y="20" width="70" height="70" clip-path="url(#albumArt)"
             href="${albumImageBase64}"
         />
 
         <!-- User Profile Picture -->
-        <clipPath id="profilePic">
-            <circle cx="420" cy="30" r="15"/>
-        </clipPath>
-        <image x="405" y="15" width="30" height="30" clip-path="url(#profilePic)"
+        <circle cx="420" cy="30" r="17" fill="${colors.background}" opacity="0.3"/> <!-- Border halo -->
+        <image x="404" y="14" width="32" height="32" clip-path="url(#profilePic)"
             href="${userImageBase64}"
         />
 
         <!-- Playing Animation -->
-        ${isPlaying ? `
-        <circle cx="105" cy="50" r="3" fill="${colors.accent}">
-            <animate attributeName="opacity" values="0;1;0" dur="1.5s" repeatCount="indefinite" />
-        </circle>` : ''}
+        ${equalizer}
 
         <!-- Track Info -->
-        <g transform="translate(120, 0)">
-            <!-- Limit text width to prevent overlap with profile picture -->
-            <text x="0" y="45" font-family="Arial" font-size="16" font-weight="bold" fill="${colors.text}">
-                ${truncate(track.name, 25)}
+        <g transform="translate(135, 0)">
+            <text x="0" y="48" font-family="${fontStack}" font-size="16" font-weight="700" fill="${colors.text}">
+                ${truncate(track.name, 23)}
             </text>
-            <text x="0" y="65" font-family="Arial" font-size="14" fill="${colors.text}80">
-                ${truncate(track.artist, 30)}
+            <text x="0" y="68" font-family="${fontStack}" font-size="14" font-weight="500" fill="${colors.text}" opacity="0.85">
+                ${truncate(track.artist, 28)}
             </text>
-            <text x="0" y="85" font-family="Arial" font-size="12" fill="${colors.text}60">
-                ${truncate(track.album, 35)}
+            <text x="0" y="87" font-family="${fontStack}" font-size="12" font-weight="400" fill="${colors.text}" opacity="0.65">
+                ${truncate(track.album, 32)}
             </text>
         </g>
 
         <!-- Time Info -->
-        <text x="420" y="85" font-family="Arial" font-size="12" fill="${colors.text}80" text-anchor="middle">
-            ${escapeXml(timeAgo)}
-        </text>
+        <g transform="translate(420, 85)">
+            <text x="0" y="0" font-family="${fontStack}" font-size="11" font-weight="400" fill="${colors.text}" opacity="0.6" text-anchor="middle">
+                ${escapeXml(timeAgo)}
+            </text>
+        </g>
     </svg>`;
 }
 
@@ -287,9 +317,21 @@ function generateFallbackSVG(theme = 'auto') {
         textColor = '#000000';
     }
 
-    return `<svg width="456" height="100" xmlns="http://www.w3.org/2000/svg">
-        <rect width="456" height="100" fill="${bgColor}" rx="6"/>
-        <text x="228" y="50" font-family="Arial" text-anchor="middle" fill="${textColor}">
+    const fontStack = "-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif";
+
+    return `<svg width="456" height="110" viewBox="0 0 456 110" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <linearGradient id="fallbackGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:${bgColor};stop-opacity:1" />
+                <stop offset="100%" style="stop-color:${bgColor};stop-opacity:0.9" />
+            </linearGradient>
+            <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+                <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000000" flood-opacity="0.1"/>
+            </filter>
+        </defs>
+        
+        <rect width="456" height="110" fill="url(#fallbackGradient)" rx="12"/>
+        <text x="228" y="60" font-family="${fontStack}" font-size="14" font-weight="500" text-anchor="middle" fill="${textColor}" opacity="0.8">
             ${escapeXml("Not playing anything right now")}
         </text>
     </svg>`;
