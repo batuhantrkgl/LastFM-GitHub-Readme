@@ -27,6 +27,35 @@ function getBaseUrl() {
 }
 
 /**
+ * Formats a timestamp into a human-readable "time ago" string.
+ * @param {number} timestamp - The timestamp in milliseconds.
+ * @returns {string} - The formatted time ago string.
+ */
+function formatTimeAgo(timestamp) {
+  if (!timestamp) return "";
+
+  const now = Date.now();
+  const diffMs = now - timestamp;
+
+  if (diffMs < 0) return "in the future";
+
+  const diffMins = Math.round(diffMs / 60000);
+
+  if (diffMins < 1) return "just now";
+  if (diffMins < 60) {
+    return `${diffMins}m ago`;
+  }
+
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) {
+    return `${diffHours}h ago`;
+  }
+
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays}d ago`;
+}
+
+/**
  * Converts an image URL to a base64 data URL
  * @param {string} imageUrl - URL of the image to convert
  * @returns {Promise<string>} - Base64 data URL or fallback
@@ -275,7 +304,7 @@ async function generateNowPlayingSVG(
 
   const timeAgo = isPlaying
     ? "Now playing"
-    : `${Math.floor((Date.now() - (track.timestamp || Date.now())) / 60000)}m ago`;
+    : formatTimeAgo(track.timestamp || Date.now());
 
   // For user images, prefer direct GitHub URL for base64 conversion to avoid proxy issues
   let userImageUrl = user.image || `/api/avatar/${username}`;
